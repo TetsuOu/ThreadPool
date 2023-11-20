@@ -9,6 +9,7 @@
 #include<condition_variable>
 #include<functional>
 #include<unordered_map>
+#include<thread>
 
 //Any类型：可以接收任意数据的类型
 class Any {
@@ -56,10 +57,15 @@ private:
 //实现一个信号量类
 class Semaphore {
 public:
-	Semaphore(int limit = 0) : resLimit_(limit) {}
-	~Semaphore() = default;
+	Semaphore(int limit = 0) 
+		: resLimit_(limit)
+		, isExit_(false){}
+	~Semaphore() {
+		isExit_ = true;
+	}
 	//获取一个信号量资源
 	void wait() {
+		if (isExit_) return;
 		std::unique_lock<std::mutex> lock(mtx_);
 		//等待信号量有资源 没有资源的话阻塞当前线程
 		cond_.wait(lock, [&]()->bool {
@@ -70,11 +76,15 @@ public:
 	}
 	//增加一个信号量资源
 	void post() {
+		if (isExit_) return;
 		std::unique_lock<std::mutex> lock(mtx_);
 		resLimit_++;
+		//linux下condition_variable的析构函数什么也没做
+		//导致这里状态已经失效，无故阻塞
 		cond_.notify_all();
 	}
 private:
+	std::atomic_bool isExit_;
 	int resLimit_;
 	std::mutex mtx_;
 	std::condition_variable cond_;
